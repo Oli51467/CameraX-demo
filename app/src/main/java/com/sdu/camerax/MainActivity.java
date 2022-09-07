@@ -1,6 +1,8 @@
 package com.sdu.camerax;
 
 import static com.sdu.camerax.ImgHelper.toBitMap;
+import static com.sdu.camerax.MyApplication.initNet;
+import static com.sdu.camerax.MyApplication.squeezencnn;
 
 import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
@@ -80,6 +82,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         previewView = findViewById(R.id.previewView);
         Button buttonDetectGPU = findViewById(R.id.buttonDetectGPU);
         buttonDetectGPU.setOnClickListener(this);
+        if (!initNet) buttonDetectGPU.setEnabled(false);
     }
 
     private boolean requestPermissions() {
@@ -161,8 +164,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         int vid = v.getId();
         if (vid == R.id.buttonDetectGPU) {
-            if (boardImage != null) {
+            if (boardImage != null && initNet) {
                 // TODO: 模型识别棋子
+                String result = squeezencnn.Detect(boardImage, true);
+                if (result.equals("black")) {
+                    Toast.makeText(this, "black", Toast.LENGTH_SHORT).show();
+                } else if (result.equals("white")) {
+                    Toast.makeText(this, "while", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, "blank", Toast.LENGTH_SHORT).show();
+                }
             }
         }
     }
