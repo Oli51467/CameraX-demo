@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.media.Image;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.Size;
 import android.view.Surface;
 import android.view.View;
@@ -33,10 +34,11 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener{
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     private final int REQUEST_CODE_PERMISSIONS = 101;
-    private final String[] REQUIRED_PERMISSIONS = new String[] {"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
+    public static final String Logger = "Gobot";
+    private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
 
     private PreviewView previewView;
 
@@ -71,18 +73,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void initWindow() {
-        Objects.requireNonNull(getSupportActionBar()).hide();   //去掉导航栏
-        //透明状态栏
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
-        //透明导航栏
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+        Objects.requireNonNull(getSupportActionBar()).hide();   // 去掉导航栏
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);   // 透明状态栏
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);   // 透明导航栏
     }
 
     private void initViews() {
         previewView = findViewById(R.id.previewView);
         Button buttonDetectGPU = findViewById(R.id.buttonDetectGPU);
         buttonDetectGPU.setOnClickListener(this);
-        if (!initNet) buttonDetectGPU.setEnabled(false);
     }
 
     private boolean requestPermissions() {
@@ -117,8 +116,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 cameraProvider = cameraProviderFuture.get();
                 // 选择相机并绑定生命周期和用例
                 bindPreview(cameraProvider);
-            } catch (ExecutionException | InterruptedException e ) {
-                // No errors need to be handled for this Future.
+            } catch (ExecutionException | InterruptedException e) {
+                Log.e(Logger, e.getMessage());
             }
         }, ContextCompat.getMainExecutor(this));
     }
@@ -126,7 +125,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @SuppressLint({"RestrictedApi", "UnsafeOptInUsageError"})
     void bindPreview(@NonNull ProcessCameraProvider cameraProvider) {
         cameraProvider.unbindAll();
-        // bind Preview
+        // 绑定Preview
         Preview preview = new Preview.Builder().build();
         // 指定所需的相机 LensFacing 选项
         CameraSelector cameraSelector = new CameraSelector.Builder()
@@ -159,18 +158,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
     }
 
-    @SuppressLint("SetTextI18n")
     @Override
     public void onClick(View v) {
         int vid = v.getId();
         if (vid == R.id.buttonDetectGPU) {
-            if (boardImage != null && initNet) {
+            if (!initNet) {
+                Toast.makeText(this, "模型正在初始化..", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (boardImage != null) {
                 // TODO: 模型识别棋子
                 String result = squeezencnn.Detect(boardImage, true);
                 if (result.equals("black")) {
                     Toast.makeText(this, "black", Toast.LENGTH_SHORT).show();
                 } else if (result.equals("white")) {
-                    Toast.makeText(this, "while", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "white", Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(this, "blank", Toast.LENGTH_SHORT).show();
                 }

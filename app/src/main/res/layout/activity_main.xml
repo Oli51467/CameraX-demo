@@ -4,37 +4,22 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <RelativeLayout
+    <FrameLayout
+        android:id="@+id/container"
         android:layout_width="match_parent"
-        android:layout_height="800dp">
+        android:layout_height="match_parent">
 
-        <FrameLayout
-            android:id="@+id/container"
+        <androidx.camera.view.PreviewView
+            android:id="@+id/previewView"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="580dp" />
+    </FrameLayout>
 
-            <androidx.camera.view.PreviewView
-                android:id="@+id/previewView"
-                android:layout_width="match_parent"
-                android:layout_height="1500px" />
-        </FrameLayout>
-
-        <Button
-            android:id="@+id/buttonDetectGPU"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_alignParentEnd="true"
-            android:text="识别-gpu" />
-
-    </RelativeLayout>
-
-    <TextView
-        android:id="@+id/result"
+    <Button
+        android:id="@+id/buttonDetectGPU"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:textSize="24sp">
-    </TextView>
+        android:layout_marginTop="-64dp"
+        android:text="识别-gpu" />
 
 </LinearLayout>

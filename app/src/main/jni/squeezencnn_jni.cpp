@@ -34,8 +34,7 @@ static ncnn::Net squeezenet;
 
 extern "C" {
 
-JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
-{
+JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     __android_log_print(ANDROID_LOG_DEBUG, "SqueezeNcnn", "JNI_OnLoad");
 
     ncnn::create_gpu_instance();
@@ -43,16 +42,15 @@ JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved)
     return JNI_VERSION_1_4;
 }
 
-JNIEXPORT void JNI_OnUnload(JavaVM* vm, void* reserved)
-{
+JNIEXPORT void JNI_OnUnload(JavaVM *vm, void *reserved) {
     __android_log_print(ANDROID_LOG_DEBUG, "SqueezeNcnn", "JNI_OnUnload");
 
     ncnn::destroy_gpu_instance();
 }
 
 // public native boolean Init(AssetManager mgr);
-JNIEXPORT jboolean JNICALL Java_com_sdu_camerax_SqueezeNcnn_Init(JNIEnv* env, jobject thiz, jobject assetManager)
-{
+JNIEXPORT jboolean JNICALL
+Java_com_sdu_camerax_SqueezeNcnn_Init(JNIEnv *env, jobject thiz, jobject assetManager) {
     ncnn::Option opt;
     opt.lightmode = true;
     opt.num_threads = 4;
@@ -63,15 +61,14 @@ JNIEXPORT jboolean JNICALL Java_com_sdu_camerax_SqueezeNcnn_Init(JNIEnv* env, jo
     if (ncnn::get_gpu_count() != 0)
         opt.use_vulkan_compute = true;
 
-    AAssetManager* mgr = AAssetManager_fromJava(env, assetManager);
+    AAssetManager *mgr = AAssetManager_fromJava(env, assetManager);
 
     squeezenet.opt = opt;
 
     // init param
     {
         int ret = squeezenet.load_param_bin(mgr, "res.param.bin");
-        if (ret != 0)
-        {
+        if (ret != 0) {
             __android_log_print(ANDROID_LOG_DEBUG, "SqueezeNcnn", "load_param_bin failed");
             return JNI_FALSE;
         }
@@ -80,8 +77,7 @@ JNIEXPORT jboolean JNICALL Java_com_sdu_camerax_SqueezeNcnn_Init(JNIEnv* env, jo
     // init bin
     {
         int ret = squeezenet.load_model(mgr, "res.bin");
-        if (ret != 0)
-        {
+        if (ret != 0) {
             __android_log_print(ANDROID_LOG_DEBUG, "SqueezeNcnn", "load_model failed");
             return JNI_FALSE;
         }
@@ -91,10 +87,10 @@ JNIEXPORT jboolean JNICALL Java_com_sdu_camerax_SqueezeNcnn_Init(JNIEnv* env, jo
 }
 
 // public native String Detect(Bitmap bitmap, boolean use_gpu);
-JNIEXPORT jstring JNICALL Java_com_sdu_camerax_SqueezeNcnn_Detect(JNIEnv* env, jobject thiz, jobject bitmap, jboolean use_gpu)
-{
-    if (use_gpu == JNI_TRUE && ncnn::get_gpu_count() == 0)
-    {
+JNIEXPORT jstring JNICALL
+Java_com_sdu_camerax_SqueezeNcnn_Detect(JNIEnv *env, jobject thiz, jobject bitmap,
+                                        jboolean use_gpu) {
+    if (use_gpu == JNI_TRUE && ncnn::get_gpu_count() == 0) {
         return env->NewStringUTF("no vulkan capable gpu");
     }
 
@@ -108,12 +104,13 @@ JNIEXPORT jstring JNICALL Java_com_sdu_camerax_SqueezeNcnn_Detect(JNIEnv* env, j
 
     // ncnn from bitmap
 //    ncnn::Mat in = ncnn::Mat::from_android_bitmap(env, bitmap, ncnn::Mat::PIXEL_BGR);
-    ncnn::Mat in = ncnn::Mat::from_android_bitmap_resize(env, bitmap, ncnn::Mat::PIXEL_RGB, 224, 224);
+    ncnn::Mat in = ncnn::Mat::from_android_bitmap_resize(env, bitmap, ncnn::Mat::PIXEL_RGB, 224,
+                                                         224);
     // squeezenet
     std::vector<float> cls_scores;
     {
         const float mean_vals[3] = {123.675f, 116.28f, 103.53f};
-        const float std_vals[3] = {1/58.395f, 1/57.12f, 1/57.375f};
+        const float std_vals[3] = {1 / 58.395f, 1 / 57.12f, 1 / 57.375f};
 
         in.substract_mean_normalize(mean_vals, std_vals);
 
@@ -127,54 +124,49 @@ JNIEXPORT jstring JNICALL Java_com_sdu_camerax_SqueezeNcnn_Detect(JNIEnv* env, j
         ex.extract(res_param_id::BLOB_output, out);
 
 
-
         cls_scores.resize(out.w);
-        for (int j=0; j<out.w; j++)
-        {
+        for (int j = 0; j < out.w; j++) {
             cls_scores[j] = out[j];
         }
     }
 
-    static const char* class_names[] = {
-            "n0","n1","n2","n3","n4","n5","n6","n7","n8","n9"
+    static const char *class_names[] = {
+            "black", "blank", "white"
     };
 
     float sum = 0.0f;
-    for (int j = 0; j < cls_scores.size(); j++)
-    {
+    for (int j = 0; j < cls_scores.size(); j++) {
         float s_l = cls_scores[j];
         cls_scores[j] = std::exp(s_l);
         //scores[i] = std::exp(scores[i]);
         sum += cls_scores[j];
     }
 
-    for (int a = 0; a < cls_scores.size(); a++)
-    {
+    for (int a = 0; a < cls_scores.size(); a++) {
         cls_scores[a] /= sum;
     }
 
 
     int size = cls_scores.size();
-    std::vector<std::pair<float,std::string>> vec;
+    std::vector<std::pair<float, std::string>> vec;
     vec.resize(size);
-    for (int i = 0; i < size; i++)
-    {
-        vec[i] = std::make_pair(cls_scores[i],class_names[i]);
+    for (int i = 0; i < size; i++) {
+        vec[i] = std::make_pair(cls_scores[i], class_names[i]);
 
     }
 
 
-    std::sort(vec.begin(), vec.end(),std::greater<std::pair<float,std::string>>());
+    std::sort(vec.begin(), vec.end(), std::greater<std::pair<float, std::string>>());
 
     char tmp[32];
-    sprintf(tmp, "%.1f", vec[0].first*100);
+    sprintf(tmp, "%.1f", vec[0].first * 100);
 
     double elasped = ncnn::get_current_time() - start_time;
 
     char time[32];
-    sprintf(time, "%.1fms",elasped);
+    sprintf(time, "%.1fms", elasped);
 
-    std::string result_str = "类别:"+vec[0].second+"  "+"概率值:"+tmp+"%"+"  "+"时间:"+time;
+    std::string result_str = vec[0].second;
 
 
     jstring result = env->NewStringUTF(result_str.c_str());
