@@ -7,7 +7,7 @@
     <FrameLayout
         android:id="@+id/container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content">
 
         <androidx.camera.view.PreviewView
             android:id="@+id/previewView"
@@ -15,11 +15,21 @@
             android:layout_height="580dp" />
     </FrameLayout>
 
-    <Button
-        android:id="@+id/buttonDetectGPU"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="-64dp"
-        android:text="识别-gpu" />
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <Button
+            android:id="@+id/btn_takePicture"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="拍照识别" />
+        <Button
+            android:id="@+id/btn_frame"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toEndOf="@id/btn_takePicture"
+            android:text="取帧识别" />
+    </RelativeLayout>
 
 </LinearLayout>

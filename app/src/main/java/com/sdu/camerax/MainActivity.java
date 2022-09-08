@@ -1,10 +1,12 @@
 package com.sdu.camerax;
 
+import static com.sdu.camerax.ImgHelper.JPEGImageToBitmap;
 import static com.sdu.camerax.ImgHelper.toBitMap;
 import static com.sdu.camerax.MyApplication.initNet;
 import static com.sdu.camerax.MyApplication.squeezencnn;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.media.Image;
@@ -14,13 +16,15 @@ import android.util.Size;
 import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageCapture;
+import androidx.camera.core.ImageCaptureException;
+import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.core.impl.utils.executor.CameraXExecutors;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -33,6 +37,8 @@ import com.google.common.util.concurrent.ListenableFuture;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -43,8 +49,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private PreviewView previewView;
 
     private ProcessCameraProvider cameraProvider;
+    private Context mContext;
 
-    private Bitmap boardImage = null;
+    private ExecutorService mExecutorService; // 声明一个线程池对象
+
+    private Bitmap boardImageFromTakePicture = null, boardImageFromFrameStream = null;
 
     // 构建ImageAnalysis用例 可将分析器(图像使用方)连接到 CameraX(图像生成方)
     private final ImageAnalysis imageAnalysis =
@@ -57,12 +66,18 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     .setTargetName("board")  // 目标名称 使用该参数调试
                     .build();
 
+    private final ImageCapture imageCapture =
+            new ImageCapture.Builder()
+                    .setTargetRotation(Surface.ROTATION_90)
+                    .build();
+
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        mContext = this;
         initWindow();
         initViews();
         if (requestPermissions()) {
@@ -80,8 +95,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void initViews() {
         previewView = findViewById(R.id.previewView);
-        Button buttonDetectGPU = findViewById(R.id.buttonDetectGPU);
-        buttonDetectGPU.setOnClickListener(this);
+        findViewById(R.id.btn_takePicture).setOnClickListener(this);
+        findViewById(R.id.btn_frame).setOnClickListener(this);
+        mExecutorService = Executors.newSingleThreadExecutor(); // 创建一个单线程线程池
     }
 
     private boolean requestPermissions() {
@@ -133,50 +149,74 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 .build();
         // 将 Preview 连接到 PreviewView
         preview.setSurfaceProvider(previewView.getSurfaceProvider());
-        // 将所选相机和任意用例绑定到生命周期。
-        cameraProvider.bindToLifecycle(this, cameraSelector, preview);
-        /*
-        将预览流渲染到目标 View 上
+
+        /*将预览流渲染到目标 View 上
         PERFORMANCE 是默认模式。PreviewView 会使用 SurfaceView 显示视频串流，但在某些情况下会回退为使用 TextureView。
         SurfaceView 具有专用的绘图界面，该对象更有可能通过内部硬件合成器实现硬件叠加层，尤其是当预览视频上面没有其他界面元素（如按钮）时。
-        通过使用硬件叠加层进行渲染，视频帧会避开 GPU 路径，从而能降低平台功耗并缩短延迟时间。
-         */
+        通过使用硬件叠加层进行渲染，视频帧会避开 GPU 路径，从而能降低平台功耗并缩短延迟时间。*/
         previewView.setImplementationMode(PreviewView.ImplementationMode.PERFORMANCE);
         // 缩放类型
         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
-
         Executor executor = CameraXExecutors.highPriorityExecutor();
         // 创建分析器
         imageAnalysis.setAnalyzer(executor, imageProxy -> {
             Image image = imageProxy.getImage();
             assert image != null;
-            boardImage = toBitMap(image);
+            boardImageFromFrameStream = toBitMap(image);
             // TODO: 棋盘图像处理(正交变换、将棋盘分割成棋盘格)
             imageProxy.close();
         });
-        //将预览和分析添加到生命周期
-        cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalysis);
+        // 将所选相机和任意用例绑定到生命周期。
+        cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, imageAnalysis);
     }
 
     @Override
+    @SuppressLint("UnsafeOptInUsageError")
     public void onClick(View v) {
         int vid = v.getId();
-        if (vid == R.id.buttonDetectGPU) {
-            if (!initNet) {
-                Toast.makeText(this, "模型正在初始化..", Toast.LENGTH_SHORT).show();
-                return;
+        if (!initNet) {
+            Toast.makeText(this, "模型正在初始化..", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (vid == R.id.btn_takePicture) {
+            imageCapture.takePicture(mExecutorService, new ImageCapture.OnImageCapturedCallback() {
+                        @Override
+                        public void onCaptureSuccess(@NonNull ImageProxy imageProxy) {
+                            // ImageProxy 转 Bitmap
+                            Image image = imageProxy.getImage();
+                            assert image != null;
+                            // 注意这里Image的格式是JPEG 不是YUV
+                            boardImageFromTakePicture = JPEGImageToBitmap(image);
+                            if (boardImageFromTakePicture != null) {
+                                // 模型识别棋子
+                                String result = squeezencnn.Detect(boardImageFromTakePicture, true);
+                                runOnUiThread(() -> printResult(result));
+                            }
+                            // 使用完关闭
+                            imageProxy.close();
+                        }
+
+                        @Override
+                        public void onError(@NonNull ImageCaptureException exception) {
+                            super.onError(exception);
+                        }
+                    }
+            );
+        } else if (vid == R.id.btn_frame) {
+            if (boardImageFromFrameStream != null) {
+                String result = squeezencnn.Detect(boardImageFromTakePicture, true);
+                runOnUiThread(() -> printResult(result));
             }
-            if (boardImage != null) {
-                // TODO: 模型识别棋子
-                String result = squeezencnn.Detect(boardImage, true);
-                if (result.equals("black")) {
-                    Toast.makeText(this, "black", Toast.LENGTH_SHORT).show();
-                } else if (result.equals("white")) {
-                    Toast.makeText(this, "white", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(this, "blank", Toast.LENGTH_SHORT).show();
-                }
-            }
+        }
+    }
+
+    public void printResult(String result) {
+        if (result.equals("black")) {
+            Toast.makeText(mContext, "black", Toast.LENGTH_SHORT).show();
+        } else if (result.equals("white")) {
+            Toast.makeText(mContext, "white", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(mContext, "blank", Toast.LENGTH_SHORT).show();
         }
     }
 }
