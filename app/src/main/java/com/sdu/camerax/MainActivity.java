@@ -68,7 +68,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private final ImageCapture imageCapture =
             new ImageCapture.Builder()
-                    .setTargetRotation(Surface.ROTATION_90)
+                    .setTargetRotation(Surface.ROTATION_0)
                     .build();
 
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
