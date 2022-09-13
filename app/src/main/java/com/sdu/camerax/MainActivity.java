@@ -53,8 +53,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Python py;
 
     private final ImageCapture imageCapture = new ImageCapture.Builder()
-                    .setTargetRotation(Surface.ROTATION_0)
-                    .build();
+            .setTargetRotation(Surface.ROTATION_0)
+            .build();
 
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
 
@@ -157,8 +157,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                             assert image != null;
                             byte[] byteArray = JPEGImageToByteArray(image);   // 注意这里Image的格式是JPEG 不是YUV
                             PyObject obj = py.getModule("CCTProcess").callAttr("main", new Kwarg("byte_array", byteArray));
-                            Integer result = obj.toJava(Integer.class);
-                            runOnUiThread(() -> Toast.makeText(mContext, result.toString(), Toast.LENGTH_SHORT).show());
+                            double[][] result = obj.toJava(double[][].class);
+                            for (double[] doubles : result) {
+                                for (double aDouble : doubles) {
+                                    Log.d("djnxyxy", Double.toString(aDouble));
+                                }
+                            }
+                            //runOnUiThread(() -> Toast.makeText(mContext, result.toString(), Toast.LENGTH_SHORT).show());
                             // 使用完关闭
                             imageProxy.close();
                         }
