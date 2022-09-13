@@ -27,7 +27,7 @@ public class MyApplication extends Application {
                 new LinkedBlockingQueue<>(STONE_NUM));
         // 初始化Ncnn
         initNcnn = new MyTask();
-        initNcnn.execute(squeezencnn);
+        //initNcnn.execute(squeezencnn);
         Log.d(TAG, "onCreate");
     }
 

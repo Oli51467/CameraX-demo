@@ -5,11 +5,16 @@ buildscript {
         mavenCentral()
         google()
         jcenter()
+        maven { url "https://chaquo.com/maven" }
+    }
+    dependencies {
+        classpath "com.chaquo.python:gradle:8.0.0"
     }
 }
 plugins {
     id 'com.android.application' version '7.2.0' apply false
     id 'com.android.library' version '7.2.0' apply false
+    id 'com.chaquo.python' version '12.0.1' apply false
 }
 
 task clean(type: Delete) {

@@ -24,12 +24,6 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="拍照识别" />
-        <Button
-            android:id="@+id/btn_frame"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_toEndOf="@id/btn_takePicture"
-            android:text="取帧识别" />
     </RelativeLayout>
 
 </LinearLayout>

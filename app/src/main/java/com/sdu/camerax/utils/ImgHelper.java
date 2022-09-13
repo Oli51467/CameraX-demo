@@ -1,4 +1,4 @@
-package com.sdu.camerax;
+package com.sdu.camerax.utils;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -9,6 +9,7 @@ import android.media.Image;
 import android.os.Environment;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
 import androidx.camera.core.ImageProxy;
 
 import java.io.ByteArrayOutputStream;
