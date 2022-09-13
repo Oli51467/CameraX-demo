@@ -5,12 +5,11 @@ import com.chaquo.python.PyObject;
 import com.chaquo.python.android.AndroidPlatform;
 import com.chaquo.python.Python;
 
-import static com.sdu.camerax.utils.ImgHelper.JPEGImageToBitmap;
+import static com.sdu.camerax.utils.ImgHelper.JPEGImageToByteArray;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
 import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
@@ -33,7 +32,6 @@ import androidx.core.content.ContextCompat;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.io.ByteArrayOutputStream;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -51,8 +49,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private final Context mContext = this;
 
     private ExecutorService mExecutorService; // 声明一个线程池对象
-
-    private Bitmap boardImageFromTakePicture = null;
 
     private Python py;
 
@@ -159,10 +155,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         public void onCaptureSuccess(@NonNull ImageProxy imageProxy) {
                             Image image = imageProxy.getImage();    // ImageProxy 转 Bitmap
                             assert image != null;
-                            boardImageFromTakePicture = JPEGImageToBitmap(image);   // 注意这里Image的格式是JPEG 不是YUV
-                            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                            boardImageFromTakePicture.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
-                            byte[] byteArray = byteArrayOutputStream.toByteArray();
+                            byte[] byteArray = JPEGImageToByteArray(image);   // 注意这里Image的格式是JPEG 不是YUV
                             PyObject obj = py.getModule("CCTProcess").callAttr("main", new Kwarg("byte_array", byteArray));
                             Integer result = obj.toJava(Integer.class);
                             runOnUiThread(() -> Toast.makeText(mContext, result.toString(), Toast.LENGTH_SHORT).show());
