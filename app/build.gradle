@@ -21,9 +21,6 @@ android {
             pip{
                 install "opencv-python"
                 install "numpy"
-                install "wave"
-                install "scipy"
-                install "matplotlib"
             }
         }
     }

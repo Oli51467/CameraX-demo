@@ -26,7 +26,7 @@ public class MyApplication extends Application {
         threadPool = new ThreadPoolExecutor(THREAD_NUM, THREAD_NUM + 2, 10, TimeUnit.SECONDS,
                 new LinkedBlockingQueue<>(STONE_NUM));
         // 初始化Ncnn
-        initNcnn = new MyTask();
+        //initNcnn = new MyTask();
         //initNcnn.execute(squeezencnn);
         Log.d(TAG, "onCreate");
     }

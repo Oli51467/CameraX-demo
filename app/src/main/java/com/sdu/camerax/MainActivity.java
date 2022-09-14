@@ -8,11 +8,14 @@ import com.chaquo.python.Python;
 import static com.sdu.camerax.utils.ImgHelper.JPEGImageToByteArray;
 
 import android.annotation.SuppressLint;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.media.Image;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
+import android.util.Pair;
 import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
@@ -20,6 +23,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.AspectRatio;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
@@ -32,6 +36,10 @@ import androidx.core.content.ContextCompat;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -53,10 +61,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Python py;
 
     private final ImageCapture imageCapture = new ImageCapture.Builder()
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setTargetRotation(Surface.ROTATION_0)
             .build();
 
     private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
+
+    public static List<Pair<Double, Double>> corners = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -131,9 +143,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         CameraSelector cameraSelector = new CameraSelector.Builder()
                 .requireLensFacing(CameraSelector.LENS_FACING_BACK)
                 .build();
-        // 将 Preview 连接到 PreviewView
-        preview.setSurfaceProvider(previewView.getSurfaceProvider());
-
         /*将预览流渲染到目标 View 上
         PERFORMANCE 是默认模式。PreviewView 会使用 SurfaceView 显示视频串流，但在某些情况下会回退为使用 TextureView。
         SurfaceView 具有专用的绘图界面，该对象更有可能通过内部硬件合成器实现硬件叠加层，尤其是当预览视频上面没有其他界面元素（如按钮）时。
@@ -143,6 +152,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
         // 将所选相机和任意用例绑定到生命周期
         cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture);
+        // 将 Preview 连接到 PreviewView
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
     }
 
     @Override
@@ -156,14 +167,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                             Image image = imageProxy.getImage();    // ImageProxy 转 Bitmap
                             assert image != null;
                             byte[] byteArray = JPEGImageToByteArray(image);   // 注意这里Image的格式是JPEG 不是YUV
+                            //Bitmap bitmap = JPEGImageToBitmap(image);
+                            //savePNG_After(bitmap, "12");
                             PyObject obj = py.getModule("CCTProcess").callAttr("main", new Kwarg("byte_array", byteArray));
                             double[][] result = obj.toJava(double[][].class);
-                            for (double[] doubles : result) {
-                                for (double aDouble : doubles) {
-                                    Log.d("djnxyxy", Double.toString(aDouble));
+                            corners.clear();
+                            for (int i = 0; i < result.length; i ++ ) {
+                                for (int j = 0; j < result[i].length; j ++ ) {
+                                    if (j > 0) {
+                                        Pair<Double, Double> pair = new Pair<>(result[i][j], result[i][j + 1]);
+                                        corners.add(pair);
+                                        break;
+                                    } else {
+                                        Log.d("djnxyxy", result[i][j] + "\n");
+                                    }
                                 }
                             }
-                            //runOnUiThread(() -> Toast.makeText(mContext, result.toString(), Toast.LENGTH_SHORT).show());
+                            Collections.sort(corners, Comparator.comparing(o -> o.first));
+                            for (Pair<Double, Double> corner : corners) {
+                                Log.d("djnxyxy", corner.first + "---" + corner.second);
+                            }
                             // 使用完关闭
                             imageProxy.close();
                         }
@@ -174,6 +197,31 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         }
                     }
             );
+            final ContentValues contentValues = new ContentValues();
+            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, "1");
+            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "2");
+            //
+            ImageCapture.OutputFileOptions outputFileOptions =
+                    new ImageCapture.OutputFileOptions.Builder(
+                            getContentResolver(),
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                            .build();
+            imageCapture.takePicture(outputFileOptions, mExecutorService,
+                    new ImageCapture.OnImageSavedCallback() {
+                        @Override
+                        public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
+                            StringBuilder builder = new StringBuilder();
+                            builder.append("图片保存路径：").append(outputFileResults.getSavedUri().getPath()).append("\n");
+                            runOnUiThread(() -> {
+                                Toast.makeText(mContext, builder.toString(), Toast.LENGTH_SHORT).show();
+                            });
+                        }
+
+                        @Override
+                        public void onError(@NonNull ImageCaptureException exception) {
+                            exception.printStackTrace();
+                        }
+                    });
         }
     }
 
