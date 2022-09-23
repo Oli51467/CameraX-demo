@@ -24,6 +24,12 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="拍照识别" />
+        <Button
+            android:id="@+id/btn_release"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toRightOf="@id/btn_takePicture"
+            android:text="解除Analyzer" />
     </RelativeLayout>
 
 </LinearLayout>

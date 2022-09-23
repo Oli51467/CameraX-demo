@@ -8,14 +8,12 @@ import com.chaquo.python.Python;
 import static com.sdu.camerax.utils.ImgHelper.JPEGImageToByteArray;
 
 import android.annotation.SuppressLint;
-import android.content.ContentValues;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.media.Image;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.util.Pair;
+import android.util.Size;
 import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
@@ -25,10 +23,12 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.AspectRatio;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
 import androidx.camera.core.ImageCaptureException;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
+import androidx.camera.core.impl.utils.executor.CameraXExecutors;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
@@ -37,27 +37,25 @@ import androidx.core.content.ContextCompat;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     private final int REQUEST_CODE_PERMISSIONS = 101;
-    public static final String Logger = "Gobot";
     private final String[] REQUIRED_PERMISSIONS = new String[]{"android.permission.CAMERA", "android.permission.WRITE_EXTERNAL_STORAGE"};
 
+    public static final String Logger = "Gobot";
+    public static List<Pair<Double, Double>> corners = new ArrayList<>();
+
     private PreviewView previewView;
-
     private ProcessCameraProvider cameraProvider;
-    private final Context mContext = this;
-
     private ExecutorService mExecutorService; // 声明一个线程池对象
-
+    private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
     private Python py;
 
     private final ImageCapture imageCapture = new ImageCapture.Builder()
@@ -66,10 +64,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             .setTargetRotation(Surface.ROTATION_0)
             .build();
 
-    private ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
-
-    public static List<Pair<Double, Double>> corners = new ArrayList<>();
-
+    // 构建ImageAnalysis用例 可将分析器(图像使用方)连接到 CameraX(图像生成方)
+    private final ImageAnalysis imageAnalysis =
+            new ImageAnalysis.Builder()
+                    .setTargetRotation(Surface.ROTATION_0) // 设置旋转角度
+                    .setOutputImageRotationEnabled(true)   // 这里必须要加true 否则图片不会旋转
+                    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)  // 设置图像输出参数 RGBA_8888或YUY_420_888
+                    .setTargetResolution(new Size(1280, 720))   // 设置宽高
+                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST) // 背压策略 生产者生产过快时的策略
+                    .setTargetName("board")  // 目标名称 使用该参数调试
+                    .build();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -93,6 +97,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private void initViews() {
         previewView = findViewById(R.id.previewView);
         findViewById(R.id.btn_takePicture).setOnClickListener(this);
+        findViewById(R.id.btn_release).setOnClickListener(this);
         mExecutorService = Executors.newSingleThreadExecutor(); // 创建一个单线程线程池
     }
 
@@ -143,6 +148,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         CameraSelector cameraSelector = new CameraSelector.Builder()
                 .requireLensFacing(CameraSelector.LENS_FACING_BACK)
                 .build();
+        // 将 Preview 连接到 PreviewView
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
         /*将预览流渲染到目标 View 上
         PERFORMANCE 是默认模式。PreviewView 会使用 SurfaceView 显示视频串流，但在某些情况下会回退为使用 TextureView。
         SurfaceView 具有专用的绘图界面，该对象更有可能通过内部硬件合成器实现硬件叠加层，尤其是当预览视频上面没有其他界面元素（如按钮）时。
@@ -150,12 +158,22 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         previewView.setImplementationMode(PreviewView.ImplementationMode.PERFORMANCE);
         // 缩放类型
         previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
-        // 将所选相机和任意用例绑定到生命周期
-        cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture);
-        // 将 Preview 连接到 PreviewView
-        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+        Executor executor = CameraXExecutors.highPriorityExecutor();
+        // 创建分析器
+        imageAnalysis.setAnalyzer(executor, imageProxy -> {
+            Image image = imageProxy.getImage();
+            assert image != null;
+            // 在这里处理image帧
+            imageProxy.close();
+        });
+        // 将所选相机和任意用例绑定到生命周期。
+        cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageCapture, imageAnalysis);
+
     }
 
+    /**
+     * CameraX拍照
+     */
     @Override
     @SuppressLint("UnsafeOptInUsageError")
     public void onClick(View v) {
@@ -167,25 +185,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                             Image image = imageProxy.getImage();    // ImageProxy 转 Bitmap
                             assert image != null;
                             byte[] byteArray = JPEGImageToByteArray(image);   // 注意这里Image的格式是JPEG 不是YUV
-                            //Bitmap bitmap = JPEGImageToBitmap(image);
-                            //savePNG_After(bitmap, "12");
+                            // 以下是python处理的部分
                             PyObject obj = py.getModule("CCTProcess").callAttr("main", new Kwarg("byte_array", byteArray));
                             double[][] result = obj.toJava(double[][].class);
                             corners.clear();
-                            for (int i = 0; i < result.length; i ++ ) {
-                                for (int j = 0; j < result[i].length; j ++ ) {
+                            // 处理CCTCode四个角
+                            for (double[] doubles : result) {
+                                for (int j = 0; j < doubles.length; j++) {
                                     if (j > 0) {
-                                        Pair<Double, Double> pair = new Pair<>(result[i][j], result[i][j + 1]);
+                                        Pair<Double, Double> pair = new Pair<>(doubles[j], doubles[j + 1]);
                                         corners.add(pair);
                                         break;
                                     } else {
-                                        Log.d("djnxyxy", result[i][j] + "\n");
+                                        Log.d("djnxyxy", doubles[j] + "\n");
                                     }
                                 }
-                            }
-                            Collections.sort(corners, Comparator.comparing(o -> o.first));
-                            for (Pair<Double, Double> corner : corners) {
-                                Log.d("djnxyxy", corner.first + "---" + corner.second);
                             }
                             // 使用完关闭
                             imageProxy.close();
@@ -197,41 +211,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         }
                     }
             );
-            final ContentValues contentValues = new ContentValues();
-            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, "1");
-            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "2");
-            //
-            ImageCapture.OutputFileOptions outputFileOptions =
-                    new ImageCapture.OutputFileOptions.Builder(
-                            getContentResolver(),
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                            .build();
-            imageCapture.takePicture(outputFileOptions, mExecutorService,
-                    new ImageCapture.OnImageSavedCallback() {
-                        @Override
-                        public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
-                            StringBuilder builder = new StringBuilder();
-                            builder.append("图片保存路径：").append(outputFileResults.getSavedUri().getPath()).append("\n");
-                            runOnUiThread(() -> {
-                                Toast.makeText(mContext, builder.toString(), Toast.LENGTH_SHORT).show();
-                            });
-                        }
-
-                        @Override
-                        public void onError(@NonNull ImageCaptureException exception) {
-                            exception.printStackTrace();
-                        }
-                    });
-        }
-    }
-
-    public void printResult(String result) {
-        if (result.equals("black")) {
-            Toast.makeText(mContext, "black", Toast.LENGTH_SHORT).show();
-        } else if (result.equals("white")) {
-            Toast.makeText(mContext, "white", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(mContext, "blank", Toast.LENGTH_SHORT).show();
+        } else if (vid == R.id.btn_release) {
+            imageAnalysis.clearAnalyzer();
         }
     }
 
